@@ -1,0 +1,12 @@
+pydantic-settings>=2.0.0
+python-dotenv>=1.0.0
+
+pandas>=2.0.0
+requests>=2.31.0
+
+APScheduler>=3.10.0
+
+openai>=1.30.0
+ollama>=0.2.0
+
+# line-bot-sdk>=3.0.0
