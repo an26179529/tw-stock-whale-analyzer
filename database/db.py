@@ -19,6 +19,7 @@ def init_db():
     try:
         cur = conn.cursor()
 
+        # ── 分點買賣明細（付費功能，暫留備用）────────────────────────────
         cur.execute("""
             CREATE TABLE IF NOT EXISTS broker_trades (
                 id          INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -35,6 +36,7 @@ def init_db():
             )
         """)
 
+        # ── 分點持倉部位（付費功能，暫留備用）────────────────────────────
         cur.execute("""
             CREATE TABLE IF NOT EXISTS broker_positions (
                 id           INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -50,6 +52,7 @@ def init_db():
             )
         """)
 
+        # ── 日K線 ─────────────────────────────────────────────────────
         cur.execute("""
             CREATE TABLE IF NOT EXISTS daily_price (
                 date     TEXT NOT NULL,
@@ -63,6 +66,26 @@ def init_db():
             )
         """)
 
+        # ── 三大法人買賣超（免費資料核心表）──────────────────────────────
+        # name        法人名稱：外資、投信、自營商（自行買賣）、自營商（避險）
+        # buy_vol     買進股數
+        # sell_vol    賣出股數
+        # net_vol     買賣超股數（buy_vol - sell_vol），正數=買超、負數=賣超
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS institutional_investors (
+                id         INTEGER PRIMARY KEY AUTOINCREMENT,
+                date       TEXT    NOT NULL,
+                stock_id   TEXT    NOT NULL,
+                name       TEXT    NOT NULL,
+                buy_vol    INTEGER DEFAULT 0,
+                sell_vol   INTEGER DEFAULT 0,
+                net_vol    INTEGER DEFAULT 0,
+                created_at TEXT    DEFAULT (datetime('now','localtime')),
+                UNIQUE(date, stock_id, name)
+            )
+        """)
+
+        # ── 異常偵測記錄 ──────────────────────────────────────────────
         cur.execute("""
             CREATE TABLE IF NOT EXISTS anomaly_log (
                 id           INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -76,6 +99,7 @@ def init_db():
             )
         """)
 
+        # ── 抓取記錄（防止重複拉取）──────────────────────────────────────
         cur.execute("""
             CREATE TABLE IF NOT EXISTS fetch_log (
                 date       TEXT NOT NULL,
