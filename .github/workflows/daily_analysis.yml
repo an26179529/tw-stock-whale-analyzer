@@ -39,7 +39,7 @@ jobs:
           cat > .env << EOF
           FINMIND_TOKEN=${{ secrets.FINMIND_TOKEN }}
           OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}
-          LINE_CHANNEL_TOKEN=${{ secrets.LINE_CHANNEL_TOKEN }}
+          LINE_CHANNEL_ACCESS_TOKEN=${{ secrets.LINE_CHANNEL_ACCESS_TOKEN }}
           LINE_USER_IDS=${{ secrets.LINE_USER_IDS }}
           EOF
 
