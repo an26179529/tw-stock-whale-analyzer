@@ -1,0 +1,50 @@
+name: 台股大戶籌碼每日分析
+
+on:
+  # 每天台灣時間 17:30 自動執行（UTC 09:30）
+  schedule:
+    - cron: '30 9 * * 1-5'   # 週一到週五，跳過週末（台股休市）
+
+  # 允許手動觸發（方便測試）
+  workflow_dispatch:
+    inputs:
+      days:
+        description: '往回收集幾天'
+        required: false
+        default: '3'
+
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+
+    steps:
+      # ── 1. 取得程式碼 ────────────────────────────────────────────
+      - name: Checkout 程式碼
+        uses: actions/checkout@v4
+
+      # ── 2. 設定 Python 環境 ──────────────────────────────────────
+      - name: 設定 Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'           # 快取 pip 套件，加速後續執行
+
+      # ── 3. 安裝套件 ──────────────────────────────────────────────
+      - name: 安裝相依套件
+        run: pip install -r requirements.txt
+
+      # ── 4. 建立 .env（從 GitHub Secrets 注入）───────────────────
+      - name: 建立 .env 設定檔
+        run: |
+          cat > .env << EOF
+          FINMIND_TOKEN=${{ secrets.FINMIND_TOKEN }}
+          OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}
+          LINE_CHANNEL_TOKEN=${{ secrets.LINE_CHANNEL_TOKEN }}
+          LINE_USER_IDS=${{ secrets.LINE_USER_IDS }}
+          EOF
+
+      # ── 5. 初始化資料庫並執行分析 ───────────────────────────────
+      - name: 執行籌碼收集與分析
+        run: |
+          DAYS=${{ github.event.inputs.days || '3' }}
+          python main.py --days $DAYS --llm openai --notify
