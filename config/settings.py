@@ -39,6 +39,15 @@ class Settings(BaseSettings):
     schedule_hour:   int = 17
     schedule_minute: int = 30
 
+    # ── Line ─────────────────────────
+    line_channel_access_token: str = ""
+    line_user_ids:      str = ""  # 逗號分隔，例如 "Uaaa,Ubbb"
+
+    @property
+    def line_user_id_list(self) -> list[str]:
+        """將逗號分隔的 user_ids 轉成清單"""
+        return [uid.strip() for uid in self.line_user_ids.split(",") if uid.strip()]
+    
     # ── 分析參數 ──────────────────────────────────
     @property
     def anomaly_config(self) -> dict:
