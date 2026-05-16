@@ -70,8 +70,13 @@ class LineNotifier:
     # 私有方法：組裝 Flex Message
     # ──────────────────────────────────────────────────────────────
 
+    _SIGNAL_THEME = {
+        "偏多": {"header_bg": "#0D3B26", "bar_color": "#2ECC71", "badge_bg": "#E8F5E9", "badge_text": "#27AE60", "icon": "📈", "change_color": "#27AE60"},
+        "觀望": {"header_bg": "#2C2C3E", "bar_color": "#F39C12", "badge_bg": "#FFF8E1", "badge_text": "#E67E22", "icon": "📊", "change_color": "#E67E22"},
+        "偏空": {"header_bg": "#3D0F0F", "bar_color": "#E74C3C", "badge_bg": "#FCEBEB", "badge_text": "#A32D2D", "icon": "📉", "change_color": "#E74C3C"},
+    }
+
     def _build_flex(self, anomaly: dict) -> dict:
-        """組裝 Line Flex Message 卡片結構"""
         stock_id    = anomaly.get("stock_id", "")
         name        = anomaly.get("name", "")
         consecutive = anomaly.get("consecutive", 0)
@@ -79,106 +84,279 @@ class LineNotifier:
         end_date    = anomaly.get("end_date", "")
         total_net   = anomaly.get("total_net", 0)
         ai_report   = anomaly.get("ai_report", "")
+        total_score = anomaly.get("total_score", 0)
+        signal      = anomaly.get("signal", "觀望")
+        stop_loss   = anomaly.get("stop_loss")
+        close       = anomaly.get("close")
+        change      = anomaly.get("change", 0) or 0
+        change_pct  = anomaly.get("change_pct", 0) or 0
+        support     = anomaly.get("support")
+        resistance  = anomaly.get("resistance")
+        sub_scores  = anomaly.get("sub_scores", {})
 
-        # AI 分析拆行，最多 3 行
-        ai_lines = [l.strip() for l in ai_report.splitlines() if l.strip()][:3]
+        theme       = self._SIGNAL_THEME.get(signal, self._SIGNAL_THEME["觀望"])
+        close_str   = f"{close}" if close is not None else "N/A"
+        sl_str      = f"{stop_loss}" if stop_loss is not None else "N/A"
+        sup_str     = f"{support}" if support is not None else "N/A"
+        res_str     = f"{resistance}" if resistance is not None else "N/A"
+        arrow       = "▲" if change >= 0 else "▼"
+        change_str  = f"{arrow} {abs(change):.2f} ({abs(change_pct):.2f}%)"
+
+        ai_lines = [l.strip() for l in ai_report.splitlines() if l.strip()][:4]
         ai_contents = [
-            {"type": "text", "text": line, "size": "xs", "color": "#555555", "wrap": True, "margin": "xs"}
+            {"type": "text", "text": line, "size": "xs", "color": "#444444", "wrap": True, "margin": "xs"}
             for line in ai_lines
         ] or [{"type": "text", "text": "（本次未啟用 AI 分析）", "size": "xs", "color": "#aaaaaa"}]
 
         return {
             "type": "flex",
-            "altText": f"⚠️ {stock_id} {name} 連續 {consecutive} 天買超",
+            "altText": f"{theme['icon']} {stock_id} {name}｜{signal} {total_score}/100",
             "contents": {
                 "type": "bubble",
-                "size": "kilo",
+                "size": "mega",
 
+                # ── Header ─────────────────────────────────────────
                 "header": {
-                    "type": "box", "layout": "horizontal",
-                    "backgroundColor": "#1A1A2E", "paddingAll": "14px",
-                    "contents": [
-                        {
-                            "type": "box", "layout": "vertical",
-                            "width": "36px", "height": "36px",
-                            "cornerRadius": "18px", "backgroundColor": "#E24B4A",
-                            "justifyContent": "center", "alignItems": "center",
-                            "contents": [{"type": "text", "text": "⚠", "color": "#ffffff", "size": "lg"}],
-                        },
-                        {
-                            "type": "box", "layout": "vertical", "margin": "md",
-                            "contents": [
-                                {"type": "text", "text": "法人異常買超通知", "color": "#ffffff", "size": "sm", "weight": "bold"},
-                                {"type": "text", "text": f"{end_date} 自動偵測", "color": "#aab4c8", "size": "xxs", "margin": "xs"},
-                            ],
-                        },
-                    ],
-                },
-
-                "body": {
-                    "type": "box", "layout": "vertical", "paddingAll": "14px",
+                    "type": "box", "layout": "vertical",
+                    "backgroundColor": theme["header_bg"],
+                    "paddingAll": "16px",
                     "contents": [
                         {
                             "type": "box", "layout": "horizontal", "alignItems": "center",
                             "contents": [
-                                {"type": "text", "text": stock_id, "size": "xl", "weight": "bold", "color": "#1A1A2E", "flex": 0},
                                 {
                                     "type": "box", "layout": "vertical",
-                                    "backgroundColor": "#FCEBEB", "cornerRadius": "20px",
-                                    "paddingStart": "8px", "paddingEnd": "8px",
-                                    "paddingTop": "3px", "paddingBottom": "3px", "margin": "sm",
-                                    "contents": [{"type": "text", "text": "連續買超", "size": "xxs", "color": "#A32D2D", "weight": "bold"}],
+                                    "width": "40px", "height": "40px", "cornerRadius": "20px",
+                                    "backgroundColor": "#ffffff22",
+                                    "justifyContent": "center", "alignItems": "center",
+                                    "contents": [{"type": "text", "text": "📊", "size": "lg"}],
                                 },
-                            ],
-                        },
-                        {"type": "separator", "margin": "md", "color": "#f0f0f0"},
-                        {
-                            "type": "box", "layout": "vertical", "margin": "md", "spacing": "sm",
-                            "contents": [
-                                self._stat_row("法人",     name),
-                                self._stat_row("連續買超", f"{consecutive} 天",          highlight=True),
-                                self._stat_row("區間",     f"{start_date} ~ {end_date}"),
-                                self._stat_row("累計買超", f"{total_net:,} 股",           highlight=True),
-                            ],
-                        },
-                        {
-                            "type": "box", "layout": "vertical",
-                            "backgroundColor": "#f7f8fa", "cornerRadius": "10px",
-                            "paddingAll": "10px", "margin": "md",
-                            "contents": [
-                                {"type": "text", "text": "AI 分析", "size": "xxs", "color": "#888888"},
-                                *ai_contents,
+                                {
+                                    "type": "box", "layout": "vertical", "margin": "md",
+                                    "contents": [
+                                        {"type": "text", "text": "台股大戶偵測", "color": "#ffffff", "size": "md", "weight": "bold"},
+                                        {"type": "text", "text": f"🗓 {end_date} 自動偵測", "color": "#aab4c8", "size": "xxs", "margin": "xs"},
+                                    ],
+                                },
                             ],
                         },
                     ],
                 },
 
-                "footer": {
-                    "type": "box", "layout": "vertical", "paddingAll": "12px",
-                    "contents": [{
-                        "type": "button", "style": "primary", "color": "#06C755", "height": "sm",
-                        "action": {
-                            "type":  "uri",
-                            "label": "查看更多分析",
-                            "uri":   f"https://tw.stock.yahoo.com/quote/{stock_id}",
+                # ── Body ───────────────────────────────────────────
+                "body": {
+                    "type": "box", "layout": "vertical", "paddingAll": "0px", "spacing": "none",
+                    "contents": [
+
+                        # 1. 股票代號 + 訊號 + 現價漲跌
+                        {
+                            "type": "box", "layout": "horizontal",
+                            "paddingAll": "16px", "paddingBottom": "10px", "alignItems": "center",
+                            "contents": [
+                                {
+                                    "type": "box", "layout": "vertical", "flex": 3,
+                                    "contents": [
+                                        {
+                                            "type": "box", "layout": "horizontal", "alignItems": "center",
+                                            "contents": [
+                                                {"type": "text", "text": stock_id, "size": "xxl", "weight": "bold", "color": "#1A1A2E", "flex": 0},
+                                                {
+                                                    "type": "box", "layout": "vertical", "margin": "sm",
+                                                    "backgroundColor": theme["badge_bg"], "cornerRadius": "20px",
+                                                    "paddingStart": "10px", "paddingEnd": "10px",
+                                                    "paddingTop": "3px", "paddingBottom": "3px",
+                                                    "contents": [{"type": "text", "text": f"{theme['icon']} {signal}", "size": "xxs", "color": theme["badge_text"], "weight": "bold"}],
+                                                },
+                                            ],
+                                        },
+                                        {"type": "text", "text": name, "size": "xs", "color": "#888888", "margin": "xs"},
+                                    ],
+                                },
+                                {
+                                    "type": "box", "layout": "vertical", "flex": 2, "alignItems": "flex-end",
+                                    "contents": [
+                                        {"type": "text", "text": close_str, "size": "xl", "weight": "bold", "color": theme["change_color"], "align": "end"},
+                                        {"type": "text", "text": change_str, "size": "xxs", "color": theme["change_color"], "align": "end", "margin": "xs"},
+                                    ],
+                                },
+                            ],
                         },
-                    }],
+
+                        # 2. 綜合評分 + 四維度小條
+                        {
+                            "type": "box", "layout": "vertical",
+                            "backgroundColor": "#F8F9FA", "paddingAll": "14px",
+                            "contents": [
+                                {
+                                    "type": "box", "layout": "horizontal", "alignItems": "flex-end",
+                                    "contents": [
+                                        {"type": "text", "text": "🎯 綜合評分", "size": "sm", "color": "#444444", "weight": "bold", "flex": 2},
+                                        {"type": "text", "text": f"{total_score}", "size": "xxl", "weight": "bold", "color": theme["badge_text"], "align": "end", "flex": 1},
+                                        {"type": "text", "text": "/100", "size": "xs", "color": "#888888", "align": "end", "flex": 0},
+                                    ],
+                                },
+                                self._score_bar(total_score, theme["bar_color"], margin="sm"),
+                                {"type": "separator", "margin": "md", "color": "#E0E0E0"},
+                                *[
+                                    self._sub_score_row(label, val, theme["bar_color"])
+                                    for label, val in sub_scores.items()
+                                ],
+                            ],
+                        },
+
+                        # 3. 法人動向四欄
+                        {
+                            "type": "box", "layout": "vertical",
+                            "paddingAll": "14px",
+                            "contents": [
+                                {"type": "text", "text": f"👤 法人動向（{name}）", "size": "sm", "weight": "bold", "color": "#1A1A2E"},
+                                {
+                                    "type": "box", "layout": "horizontal", "margin": "md", "spacing": "sm",
+                                    "contents": [
+                                        self._stat_card("連續買超", f"{consecutive} 天", theme["badge_text"]),
+                                        self._stat_card("累計買超", f"{total_net // 1000}K 股", theme["badge_text"]),
+                                        self._stat_card("起始日",   start_date[-5:], "#555555"),
+                                        self._stat_card("截止日",   end_date[-5:],   "#555555"),
+                                    ],
+                                },
+                            ],
+                        },
+
+                        {"type": "separator", "color": "#EEEEEE"},
+
+                        # 4. 股價資訊 + AI 分析（左右排）
+                        {
+                            "type": "box", "layout": "horizontal",
+                            "paddingAll": "14px", "spacing": "md",
+                            "contents": [
+                                # 股價資訊
+                                {
+                                    "type": "box", "layout": "vertical", "flex": 1,
+                                    "backgroundColor": "#F8F9FA", "cornerRadius": "10px",
+                                    "paddingAll": "10px", "spacing": "sm",
+                                    "contents": [
+                                        {"type": "text", "text": "📈 股價資訊", "size": "xxs", "weight": "bold", "color": "#444444"},
+                                        {"type": "separator", "margin": "sm", "color": "#E0E0E0"},
+                                        self._stat_row("現價",   close_str),
+                                        self._stat_row("停損參考", sl_str,  highlight=True),
+                                        self._stat_row("支撐",   sup_str),
+                                        self._stat_row("壓力",   res_str),
+                                    ],
+                                },
+                                # AI 分析
+                                {
+                                    "type": "box", "layout": "vertical", "flex": 1,
+                                    "backgroundColor": "#F0F7FF", "cornerRadius": "10px",
+                                    "paddingAll": "10px", "spacing": "sm",
+                                    "contents": [
+                                        {"type": "text", "text": "🧠 AI 分析", "size": "xxs", "weight": "bold", "color": "#1565C0"},
+                                        {"type": "separator", "margin": "sm", "color": "#BBDEFB"},
+                                        *ai_contents,
+                                    ],
+                                },
+                            ],
+                        },
+                    ],
+                },
+
+                # ── Footer ─────────────────────────────────────────
+                "footer": {
+                    "type": "box", "layout": "vertical", "paddingAll": "0px", "spacing": "none",
+                    "contents": [
+                        # 四個按鈕列
+                        {
+                            "type": "box", "layout": "horizontal",
+                            "paddingTop": "10px", "paddingBottom": "4px",
+                            "paddingStart": "8px", "paddingEnd": "8px",
+                            "spacing": "sm",
+                            "contents": [
+                                self._footer_btn("🔍 更多分析", f"https://tw.stock.yahoo.com/quote/{stock_id}"),
+                                self._footer_btn("⭐ 加入自選", f"https://tw.stock.yahoo.com/quote/{stock_id}"),
+                                self._footer_btn("🔔 設提醒", f"https://tw.stock.yahoo.com/quote/{stock_id}"),
+                                self._footer_btn("🔗 分享", f"https://tw.stock.yahoo.com/quote/{stock_id}"),
+                            ],
+                        },
+                        # 底部說明列
+                        {
+                            "type": "box", "layout": "horizontal",
+                            "backgroundColor": "#06C755", "paddingAll": "8px",
+                            "alignItems": "center",
+                            "contents": [
+                                {"type": "text", "text": "LINE  台股大戶偵測機器人  ｜  本訊息由程式自動發送，請勿直接回覆", "size": "xxs", "color": "#ffffff", "wrap": True, "align": "center"},
+                            ],
+                        },
+                    ],
                 },
             },
         }
 
     def _stat_row(self, label: str, value: str, highlight: bool = False) -> dict:
-        """數據列：label 左、value 右"""
         return {
             "type": "box", "layout": "horizontal",
             "contents": [
                 {"type": "text", "text": label, "size": "xs", "color": "#888888", "flex": 2},
+                {"type": "text", "text": value, "size": "xs",
+                 "color": "#E24B4A" if highlight else "#1A1A2E",
+                 "weight": "bold" if highlight else "regular",
+                 "flex": 3, "align": "end"},
+            ],
+        }
+
+    def _stat_card(self, label: str, value: str, value_color: str) -> dict:
+        """法人動向四欄卡片"""
+        return {
+            "type": "box", "layout": "vertical", "flex": 1,
+            "backgroundColor": "#ffffff", "cornerRadius": "8px",
+            "paddingAll": "8px", "alignItems": "center",
+            "contents": [
+                {"type": "text", "text": value, "size": "sm", "weight": "bold", "color": value_color, "align": "center"},
+                {"type": "text", "text": label, "size": "xxs", "color": "#888888", "align": "center", "margin": "xs"},
+            ],
+        }
+
+    def _score_bar(self, score: int, bar_color: str, margin: str = "md") -> dict:
+        """橫向評分長條"""
+        return {
+            "type": "box", "layout": "horizontal",
+            "backgroundColor": "#E0E0E0", "cornerRadius": "4px",
+            "height": "8px", "margin": margin,
+            "contents": [
+                {"type": "box", "layout": "vertical",
+                 "backgroundColor": bar_color, "cornerRadius": "4px",
+                 "width": f"{max(score, 3)}%", "contents": []},
+                {"type": "filler"},
+            ],
+        }
+
+    def _sub_score_row(self, label: str, score: int, bar_color: str) -> dict:
+        """四維度小條（雷達圖替代）"""
+        return {
+            "type": "box", "layout": "horizontal", "margin": "sm", "alignItems": "center",
+            "contents": [
+                {"type": "text", "text": label, "size": "xxs", "color": "#666666", "flex": 2},
                 {
-                    "type": "text", "text": value, "size": "xs",
-                    "color": "#E24B4A" if highlight else "#1A1A2E",
-                    "weight": "bold" if highlight else "regular",
-                    "flex": 3, "align": "end",
+                    "type": "box", "layout": "horizontal", "flex": 5,
+                    "backgroundColor": "#E0E0E0", "cornerRadius": "3px", "height": "6px",
+                    "contents": [
+                        {"type": "box", "layout": "vertical",
+                         "backgroundColor": bar_color, "cornerRadius": "3px",
+                         "width": f"{max(score, 3)}%", "contents": []},
+                        {"type": "filler"},
+                    ],
                 },
+                {"type": "text", "text": str(score), "size": "xxs", "color": "#888888", "align": "end", "flex": 1, "margin": "sm"},
+            ],
+        }
+
+    def _footer_btn(self, label: str, uri: str) -> dict:
+        """底部四個小按鈕"""
+        return {
+            "type": "box", "layout": "vertical", "flex": 1,
+            "backgroundColor": "#F5F5F5", "cornerRadius": "8px",
+            "paddingAll": "8px", "alignItems": "center",
+            "action": {"type": "uri", "uri": uri},
+            "contents": [
+                {"type": "text", "text": label, "size": "xxs", "color": "#444444", "align": "center", "wrap": True},
             ],
         }
 
