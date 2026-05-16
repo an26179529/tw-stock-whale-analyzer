@@ -24,19 +24,28 @@ logger = logging.getLogger(__name__)
 
 # 提示詞模板（中文，給 LLM 的指令）
 PROMPT_TEMPLATE = """
-你是一位台股籌碼分析師，請根據以下法人買賣超異常資料，用繁體中文給出簡短的分析與操作建議。
+你是一位台股籌碼分析師，請根據以下法人籌碼與技術面綜合資料，用繁體中文給出簡短的分析與操作建議。
 
-【異常資料】
+【籌碼資料】
 股票代號：{stock_id}
 法人：{name}
 連續買超天數：{consecutive} 天
 買超區間：{start_date} ~ {end_date}
 累計買超股數：{total_net:,} 股
 
+【技術面資料】
+現價：{close}
+技術訊號：{tech_signals}
+
+【綜合評分】
+總評分：{total_score}/100（法人 {inst_score} + 技術 {tech_score:+d}）
+訊號方向：{signal}
+停損參考：{stop_loss}
+
 【分析要求】
-1. 說明此訊號的意義（2～3 句）
-2. 可能的後續走勢判斷（1～2 句）
-3. 操作建議（1 句，保守為主）
+1. 說明籌碼訊號的意義（1～2 句）
+2. 結合技術面判斷後續走勢（1～2 句）
+3. 操作建議：進場條件、停損位（1 句，保守為主）
 
 請用條列式回答，總字數控制在 150 字以內。
 """.strip()
@@ -67,13 +76,26 @@ class LLMAnalyzer:
         :param anomaly: institutional_analyzer 回傳的異常 dict
         :return:        LLM 分析結果字串
         """
+        tech_signals_text = "、".join(
+            s["detail"]
+            for s in anomaly.get("tech_signals", {}).values()
+            if s.get("detail")
+        ) or "無技術訊號"
+
         prompt = PROMPT_TEMPLATE.format(
-            stock_id   = anomaly["stock_id"],
-            name       = anomaly["name"],
-            consecutive= anomaly["consecutive"],
-            start_date = anomaly["start_date"],
-            end_date   = anomaly["end_date"],
-            total_net  = anomaly["total_net"],
+            stock_id    = anomaly["stock_id"],
+            name        = anomaly["name"],
+            consecutive = anomaly["consecutive"],
+            start_date  = anomaly["start_date"],
+            end_date    = anomaly["end_date"],
+            total_net   = anomaly["total_net"],
+            close       = anomaly.get("close", "N/A"),
+            tech_signals= tech_signals_text,
+            total_score = anomaly.get("total_score", 0),
+            inst_score  = anomaly.get("inst_score", 0),
+            tech_score  = anomaly.get("tech_score", 0),
+            signal      = anomaly.get("signal", "觀望"),
+            stop_loss   = anomaly.get("stop_loss", "N/A"),
         )
 
         logger.info(f"[{anomaly['stock_id']}] 呼叫 {self.provider} 分析...")

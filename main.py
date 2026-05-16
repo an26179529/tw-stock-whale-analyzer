@@ -24,6 +24,8 @@ from pathlib import Path
 from database.db import init_db
 from collectors.data_collector import DataCollector
 from analysis.institutional_analyzer import InstitutionalAnalyzer
+from analysis.technical_analyzer import TechnicalAnalyzer
+from analysis.score_engine import ScoreEngine
 from analysis.llm_analyzer import LLMAnalyzer
 from notifiers.line_notifier import LineNotifier
 
@@ -90,9 +92,29 @@ def run_analyze(
 ) -> None:
     """執行分析 → LLM 解讀 → Line 通知"""
 
-    # 第一步：規則分析
+    # 第一步：法人籌碼分析
     analyzer  = InstitutionalAnalyzer()
     anomalies = analyzer.analyze(stock_ids, institutions)
+
+    # 第二步：技術面分析，將完整結果合併至異常清單
+    tech_analyzer = TechnicalAnalyzer()
+    tech_results  = {r["stock_id"]: r for r in tech_analyzer.analyze(stock_ids)}
+    for a in anomalies:
+        tech = tech_results.get(a["stock_id"])
+        if tech:
+            a["tech_score"]   = tech["tech_score"]
+            a["tech_detail"]  = tech["detail"]
+            a["tech_signals"] = tech["signals"]
+            a["close"]        = tech["close"]
+            a["ma20"]         = tech["ma20"]
+            a["change"]       = tech["change"]
+            a["change_pct"]   = tech["change_pct"]
+            a["support"]      = tech["support"]
+            a["resistance"]   = tech["resistance"]
+            a["trend_score"]  = tech["trend_score"]
+
+    # 第三步：綜合評分
+    anomalies = ScoreEngine().score_all(anomalies)
 
     inst_label = "、".join(institutions) if institutions else "全部法人"
     print("\n" + "=" * 44)
@@ -105,7 +127,7 @@ def run_analyze(
         return
 
     for a in anomalies:
-        print(f"  ⚠️  {a['detail']}")
+        print(f"  {a['score_detail']}")
 
     # 第二步：LLM 解讀
     if llm_provider:
