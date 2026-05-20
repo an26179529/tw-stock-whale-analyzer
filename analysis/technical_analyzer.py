@@ -61,8 +61,6 @@ class TechnicalAnalyzer:
         }
 
         total_score = sum(s["score"] for s in signals.values())
-        if total_score == 0:
-            return None
 
         latest = df.iloc[-1]
         prev   = df.iloc[-2]
